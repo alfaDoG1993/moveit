@@ -40,14 +40,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "jog_arm_data.h"
 #include "low_pass_filter.h"
+#include <dynamic_reconfigure/Config.h>
+#include <dynamic_reconfigure/DoubleParameter.h>
+#include <dynamic_reconfigure/Reconfigure.h>
+#include <dynamic_reconfigure/server.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/robot_model_loader/robot_model_loader.h>
+#include <moveit_jog_arm/SpeedScalesConfig.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/UInt32.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
-#include <dynamic_reconfigure/server.h>
-#include <moveit_jog_arm/SpeedScalesConfig.h>
-#include <std_msgs/UInt32.h>
 namespace moveit_jog_arm
 {
 class JogCalcs

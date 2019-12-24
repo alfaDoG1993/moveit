@@ -52,18 +52,15 @@ JogCalcs::JogCalcs(const JogArmParameters& parameters, JogArmShared& shared_vari
   dynamic_reconfigure::Server<moveit_jog_arm::SpeedScalesConfig> server;
   dynamic_reconfigure::Server<moveit_jog_arm::SpeedScalesConfig>::CallbackType callbackFunction;
 
-  callbackFunction = boost::bind(&JogCalcs::scaleCoefDynParamCallback, this,_1, _2);
+  callbackFunction = boost::bind(&JogCalcs::scaleCoefDynParamCallback, this, _1, _2);
   server.setCallback(callbackFunction);
 
-//  server.getConfigDefault(config_);
-  config_.groups.speed_scaling.linear_speed_scale = 0.5;
-  config_.groups.speed_scaling.rotational_speed_scale = 0.5;
-  config_.groups.speed_scaling.joint_speed_scale = 0.5;
+  // Server.getConfigDefault(config_);
+  config_.speed_scaling_factor = 0.5;
   // MoveIt Setup
-  while (ros::ok() && !model_loader_ptr)
-  {
-    ROS_WARN_THROTTLE_NAMED(5, LOGNAME, "Waiting for a non-null robot_model_loader pointer");
-    ros::Duration(WHILE_LOOP_WAIT).sleep();
+  while (ros::ok() && !model_loader_ptr) {
+      ROS_WARN_THROTTLE_NAMED(5, LOGNAME, "Waiting for a non-null robot_model_loader pointer");
+      ros::Duration(WHILE_LOOP_WAIT).sleep();
   }
   const robot_model::RobotModelPtr& kinematic_model = model_loader_ptr->getModel();
   kinematic_state_ = std::make_shared<robot_state::RobotState>(kinematic_model);
@@ -689,13 +686,10 @@ bool JogCalcs::updateJoints()
   return true;
 }
 // Update speed scaling parametrs
-void JogCalcs::scaleCoefDynParamCallback(moveit_jog_arm::SpeedScalesConfig &config, uint32_t level){
-    config_.groups.speed_scaling = config.groups.speed_scaling;
-        ROS_INFO_STREAM("\nNew speed scaling parametrs:\n" <<
-                        "Linear speed scale = " << config_.groups.speed_scaling.linear_speed_scale << "\n" <<
-                        "Angular speed scale = " << config_.groups.speed_scaling.rotational_speed_scale << "\n" <<
-                        "Joint speed scale = " << config_.groups.speed_scaling.joint_speed_scale << std::endl);
-
+void JogCalcs::scaleCoefDynParamCallback(moveit_jog_arm::SpeedScalesConfig &config, uint32_t level)
+{
+    config_.speed_scaling_factor = config.speed_scaling_factor;
+    ROS_INFO_STREAM("Speed scaling factor is " << config_.speed_scaling_factor * 100.0 << " %");
 }
 // Scale the incoming jog command
 Eigen::VectorXd JogCalcs::scaleCartesianCommand(const geometry_msgs::TwistStamped& command) const
@@ -703,27 +697,30 @@ Eigen::VectorXd JogCalcs::scaleCartesianCommand(const geometry_msgs::TwistStampe
   Eigen::VectorXd result(6);
 
   // Apply user-defined scaling if inputs are unitless [-1:1]
-  if (parameters_.command_in_type == "unitless")
-  {
-    result[0] = parameters_.linear_scale * parameters_.publish_period * command.twist.linear.x * config_.groups.speed_scaling.linear_speed_scale;
-    result[1] = parameters_.linear_scale * parameters_.publish_period * command.twist.linear.y * config_.groups.speed_scaling.linear_speed_scale;
-    result[2] = parameters_.linear_scale * parameters_.publish_period * command.twist.linear.z * config_.groups.speed_scaling.linear_speed_scale;
-    result[3] = parameters_.rotational_scale * parameters_.publish_period * command.twist.angular.x * config_.groups.speed_scaling.rotational_speed_scale;
-    result[4] = parameters_.rotational_scale * parameters_.publish_period * command.twist.angular.y * config_.groups.speed_scaling.rotational_speed_scale;
-    result[5] = parameters_.rotational_scale * parameters_.publish_period * command.twist.angular.z * config_.groups.speed_scaling.rotational_speed_scale;
+  if (parameters_.command_in_type == "unitless") {
+      result[0] = parameters_.linear_scale * parameters_.publish_period * command.twist.linear.x
+                  * config_.speed_scaling_factor;
+      result[1] = parameters_.linear_scale * parameters_.publish_period * command.twist.linear.y
+                  * config_.speed_scaling_factor;
+      result[2] = parameters_.linear_scale * parameters_.publish_period * command.twist.linear.z
+                  * config_.speed_scaling_factor;
+      result[3] = parameters_.rotational_scale * parameters_.publish_period
+                  * command.twist.angular.x * config_.speed_scaling_factor;
+      result[4] = parameters_.rotational_scale * parameters_.publish_period
+                  * command.twist.angular.y * config_.speed_scaling_factor;
+      result[5] = parameters_.rotational_scale * parameters_.publish_period
+                  * command.twist.angular.z * config_.groups.speed_scaling_factor;
   }
   // Otherwise, commands are in m/s and rad/s
-  else if (parameters_.command_in_type == "speed_units")
-  {
-    result[0] = command.twist.linear.x * parameters_.publish_period;
-    result[1] = command.twist.linear.y * parameters_.publish_period;
-    result[2] = command.twist.linear.z * parameters_.publish_period;
-    result[3] = command.twist.angular.x * parameters_.publish_period;
-    result[4] = command.twist.angular.y * parameters_.publish_period;
-    result[5] = command.twist.angular.z * parameters_.publish_period;
-  }
-  else
-    ROS_ERROR_STREAM_NAMED(LOGNAME, "Unexpected command_in_type");
+  else if (parameters_.command_in_type == "speed_units") {
+      result[0] = command.twist.linear.x * parameters_.publish_period;
+      result[1] = command.twist.linear.y * parameters_.publish_period;
+      result[2] = command.twist.linear.z * parameters_.publish_period;
+      result[3] = command.twist.angular.x * parameters_.publish_period;
+      result[4] = command.twist.angular.y * parameters_.publish_period;
+      result[5] = command.twist.angular.z * parameters_.publish_period;
+  } else
+      ROS_ERROR_STREAM_NAMED(LOGNAME, "Unexpected command_in_type");
 
   return result;
 }
@@ -751,7 +748,8 @@ Eigen::VectorXd JogCalcs::scaleJointCommand(const control_msgs::JointJog& comman
     }
     // Apply user-defined scaling if inputs are unitless [-1:1]
     if (parameters_.command_in_type == "unitless")
-      result[c] = command.velocities[m] * parameters_.joint_scale * parameters_.publish_period * config_.groups.speed_scaling.joint_speed_scale;
+        result[c] = command.velocities[m] * parameters_.joint_scale * parameters_.publish_period
+                    * config_.speed_scaling_factor;
     // Otherwise, commands are in m/s and rad/s
     else if (parameters_.command_in_type == "speed_units")
       result[c] = command.velocities[m] * parameters_.publish_period;
